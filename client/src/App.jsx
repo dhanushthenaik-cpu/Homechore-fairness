@@ -1,18 +1,724 @@
-import React,{useEffect,useMemo,useState}from"react";import{Home,Users,CheckCircle2,CalendarDays,BarChart3,Plus,Trash2,Check,RefreshCw,AlertCircle,Leaf,ListTodo}from"lucide-react";
-const api=async(p,o={})=>{const r=await fetch("/api"+p,{headers:{"Content-Type":"application/json"},...o}),d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.message||"Request failed");return d},today=new Date().toISOString().slice(0,10);
-export default function App(){const[page,P]=useState("Overview"),[members,M]=useState([]),[chores,C]=useState([]),[fair,F]=useState({members:[],periodDays:30}),[busy,B]=useState(true),[err,E]=useState(""),[msg,G]=useState(""),[name,N]=useState(""),[show,S]=useState(false),[filter,Q]=useState("All"),[form,T]=useState({title:"",description:"",assignedTo:"",dueDate:today,priority:"Medium",recurrence:"None",weight:1});
-const load=async()=>{B(true);E("");try{const[m,c,f]=await Promise.all([api("/housemates"),api("/chores"),api("/analytics/fairness?days=30")]);M(m);C(c);F(f);T(x=>({...x,assignedTo:x.assignedTo||(m[0]?._id||"")}));}catch(e){E(e.message)}finally{B(false)}};useEffect(()=>{load()},[]);
-const done=chores.filter(x=>x.status==="Completed").length,pending=chores.length-done,overdue=chores.filter(x=>x.status==="Pending"&&new Date(x.dueDate)<new Date(today)).length,filtered=useMemo(()=>chores.filter(x=>filter==="All"||x.status===filter),[chores,filter]);
-const addMember=async e=>{e.preventDefault();try{await api("/housemates",{method:"POST",body:JSON.stringify({name})});N("");await load();G("Housemate added.")}catch(x){E(x.message)}};
-const addChore=async e=>{e.preventDefault();try{await api("/chores",{method:"POST",body:JSON.stringify(form)});S(false);T({...form,title:"",description:""});await load();G("Chore created.")}catch(x){E(x.message)}};
-const toggle=async id=>{try{await api(`/chores/${id}/complete`,{method:"PATCH",body:"{}"});await load()}catch(x){E(x.message)}};
-const remove=async id=>{if(!confirm("Delete this chore and its history?"))return;try{await api(`/chores/${id}`,{method:"DELETE"});await load()}catch(x){E(x.message)}};
-const delMember=async id=>{if(!confirm("Remove housemate?"))return;try{await api(`/housemates/${id}`,{method:"DELETE"});await load()}catch(x){E(x.message)}};
-const nav=[["Overview",Home],["Chores",ListTodo],["Housemates",Users],["Fairness",BarChart3]];
-return <div className="shell"><aside><div className="brand"><span><Leaf/></span><div><b>homechore</b><small>FAIRNESS PLANNER</small></div></div><div className="workspace">🏠 <div><b>Shared home</b><small>Household workspace</small></div></div><label className="navlabel">WORKSPACE</label>{nav.map(([n,I])=><button className={page===n?"selected":"nav"} onClick={()=>P(n)} key={n}><I size={18}/>{n}</button>)}<div className="tip"><b>Small steps, shared fairly.</b><p>A little teamwork keeps a home running smoothly.</p></div></aside>
-<main><header><div><small>YOUR HOUSEHOLD</small><h1>{page}</h1></div><button className="secondary" onClick={load}><RefreshCw size={15}/> Refresh</button></header>{err&&<div className="alert">{err}<button onClick={()=>E("")}>×</button></div>}{msg&&<div className="success">{msg}<button onClick={()=>G("")}>×</button></div>}
-{busy?<p className="loading">Loading household data…</p>:page==="Overview"? <><section className="hero"><span>HOUSEHOLD OVERVIEW</span><h2>Good teamwork starts at home.</h2><p>See what's done, what's next, and how the workload is shared.</p></section><div className="stats"><Stat icon={ListTodo}label="Total chores"value={chores.length}note="In your household"/><Stat icon={CheckCircle2}label="Completed"value={done}note={`${chores.length?Math.round(done/chores.length*100):0}% completion rate`}/><Stat icon={CalendarDays}label="Pending"value={pending}note="Waiting to be done"/><Stat icon={AlertCircle}label="Overdue"value={overdue}note="Past their due date"/></div><div className="columns"><section className="panel"><PanelHead title="Upcoming chores"sub="Keep the household moving" action={()=>P("Chores")}/><ChoreList chores={chores.filter(x=>x.status==="Pending").slice(0,5)}toggle={toggle}remove={remove}/></section><section className="panel"><h3>Housemates</h3><p className="muted">People sharing the workload</p>{members.map(m=><div className="person"key={m._id}><i>{m.name[0]}</i><b>{m.name}</b></div>)}{!members.length&&<Empty text="Add housemates to get started."/>}</section></div></>:page==="Chores"?<section className="panel"><PanelHead title="Chore rota"sub="Create tasks, assign owners and track completion"/><button className="primary"onClick={()=>S(!show)}><Plus size={16}/> Add chore</button>{show&&<form className="form"onSubmit={addChore}><label>Chore title<input required minLength="2"value={form.title}onChange={e=>T({...form,title:e.target.value})}placeholder="Clean kitchen"/></label><label>Assigned to<select required value={form.assignedTo}onChange={e=>T({...form,assignedTo:e.target.value})}><option value="">Select housemate</option>{members.map(m=><option value={m._id}key={m._id}>{m.name}</option>)}</select></label><label>Due date<input type="date"required value={form.dueDate}onChange={e=>T({...form,dueDate:e.target.value})}/></label><label>Priority<select value={form.priority}onChange={e=>T({...form,priority:e.target.value})}>{["Low","Medium","High"].map(x=><option>{x}</option>)}</select></label><label>Repeat<select value={form.recurrence}onChange={e=>T({...form,recurrence:e.target.value})}>{["None","Daily","Weekly","Monthly"].map(x=><option>{x}</option>)}</select></label><label>Workload weight<input type="number"min=".5"max="10"step=".5"value={form.weight}onChange={e=>T({...form,weight:Number(e.target.value)})}/></label><label className="full">Description<input value={form.description}onChange={e=>T({...form,description:e.target.value})}/></label><div className="full actions"><button type="button"className="secondary"onClick={()=>S(false)}>Cancel</button><button className="primary"disabled={!members.length}>Save chore</button></div></form>}<div className="filters">{["All","Pending","Completed"].map(x=><button className={filter===x?"on":""}onClick={()=>Q(x)}>{x}</button>)}</div><ChoreList chores={filtered}toggle={toggle}remove={remove}/></section>:page==="Housemates"?<section className="panel"><h3>Your housemates</h3><p className="muted">Manage people in your shared household.</p><form className="addmember"onSubmit={addMember}><input required minLength="2"maxLength="40"placeholder="Enter housemate name"value={name}onChange={e=>N(e.target.value)}/><button className="primary"><Plus size={16}/> Add housemate</button></form><div className="peoplegrid">{members.map(m=><div className="personcard"key={m._id}><i>{m.name[0]}</i><b>{m.name}</b><button onClick={()=>delMember(m._id)}title="Remove"><Trash2 size={15}/></button></div>)}</div>{!members.length&&<Empty text="Add the people who share your home."/>}</section>:<section className="panel"><h3>Fairness analytics</h3><p className="muted">Completed workload in the last {fair.periodDays} days, adjusted by chore weight.</p><div className="summary"><div><small>Total workload</small><b>{fair.totalWorkload}</b></div><div><small>Average per housemate</small><b>{fair.averageWorkload}</b></div><div><small>Housemates</small><b>{members.length}</b></div></div>{fair.members?.map(m=><div className="fairrow"><div><b>{m.name}</b><small>{m.completedCount} completed · {m.workload} points</small></div><div className="bar"><span style={{width:`${m.sharePercent}%`}}/></div><b>{m.sharePercent}%</b><em className={m.imbalance?"warning":"ok"}>{m.imbalance?"Above average":"In range"}</em></div>)}{!members.length&&<Empty text="Add housemates and complete chores to build a fairness history."/>}<p className="disclaimer">Fairness is an indicator, not a judgement. It depends on recorded completions, date range and workload weights.</p></section>}<footer>HomeChore Fairness · Shared living, made simpler</footer></main></div>}
-function Stat({icon:I,label,value,note}){return <div className="stat"><I/><small>{label}</small><b>{value}</b><span>{note}</span></div>}
-function PanelHead({title,sub,action}){return <div className="panelhead"><div><h3>{title}</h3><p className="muted">{sub}</p></div>{action&&<button className="link"onClick={action}>View all →</button>}</div>}
-function Empty({text}){return <div className="empty">✦<p>{text}</p></div>}
-function ChoreList({chores,toggle,remove}){return chores.length?<div>{chores.map(c=><div className="chore"key={c._id}><button className={`check ${c.status==="Completed"?"checked":""}`}onClick={()=>toggle(c._id)}>{c.status==="Completed"&&<Check size={13}/>}</button><div className="choretext"><b>{c.title}</b><small>{c.assignedTo?.name||"Housemate"} · Due {new Date(c.dueDate).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}{c.recurrence!=="None"?` · ${c.recurrence}`:""}</small></div><span className={`priority ${c.priority.toLowerCase()}`}>{c.priority}</span><button className="delete"onClick={()=>remove(c._id)}><Trash2 size={15}/></button></div>)}</div>:<Empty text="No chores here yet. Add your first task."/>}
+
+import React, { useEffect, useMemo, useState } from "react";
+import {
+    Home,
+    Users,
+    CheckCircle2,
+    CalendarDays,
+    BarChart3,
+    Plus,
+    Trash2,
+    Check,
+    RefreshCw,
+    AlertCircle,
+    Leaf,
+    ListTodo
+} from "lucide-react";
+
+// Production and local API configuration
+const API_BASE_URL =
+    import.meta.env.VITE_API_URL || "";
+
+// Central API helper
+const api = async (p, o = {}) => {
+    const r = await fetch(`${API_BASE_URL}/api${p}`, {
+        headers: {
+            "Content-Type": "application/json"
+        },
+        ...o
+    });
+
+    const d = await r.json().catch(() => ({}));
+
+    if (!r.ok) {
+        throw Error(d.message || "Request failed");
+    }
+
+    return d;
+};
+
+const today = new Date().toISOString().slice(0, 10);
+
+export default function App() {
+    const [page, P] = useState("Overview");
+    const [members, M] = useState([]);
+    const [chores, C] = useState([]);
+    const [fair, F] = useState({
+        members: [],
+        periodDays: 30
+    });
+    const [busy, B] = useState(true);
+    const [err, E] = useState("");
+    const [msg, G] = useState("");
+    const [name, N] = useState("");
+    const [show, S] = useState(false);
+    const [filter, Q] = useState("All");
+
+    const [form, T] = useState({
+        title: "",
+        description: "",
+        assignedTo: "",
+        dueDate: today,
+        priority: "Medium",
+        recurrence: "None",
+        weight: 1
+    });
+
+    // Load dashboard data
+    const load = async () => {
+        B(true);
+        E("");
+
+        try {
+            const [m, c, f] = await Promise.all([
+                api("/housemates"),
+                api("/chores"),
+                api("/analytics/fairness?days=30")
+            ]);
+
+            M(m);
+            C(c);
+            F(f);
+
+            T(x => ({
+                ...x,
+                assignedTo: x.assignedTo || (m[0]?._id || "")
+            }));
+        } catch (e) {
+            E(e.message);
+        } finally {
+            B(false);
+        }
+    };
+
+    useEffect(() => {
+        load();
+    }, []);
+
+    // Dashboard calculations
+    const done = chores.filter(
+        x => x.status === "Completed"
+    ).length;
+
+    const pending = chores.length - done;
+
+    const overdue = chores.filter(
+        x =>
+            x.status === "Pending" &&
+            new Date(x.dueDate) < new Date(today)
+    ).length;
+
+    const filtered = useMemo(
+        () =>
+            chores.filter(
+                x => filter === "All" || x.status === filter
+            ),
+        [chores, filter]
+    );
+
+    // Add housemate
+    const addMember = async e => {
+        e.preventDefault();
+
+        try {
+            await api("/housemates", {
+                method: "POST",
+                body: JSON.stringify({ name })
+            });
+
+            N("");
+            await load();
+            G("Housemate added.");
+        } catch (x) {
+            E(x.message);
+        }
+    };
+
+    // Create chore
+    const addChore = async e => {
+        e.preventDefault();
+
+        try {
+            await api("/chores", {
+                method: "POST",
+                body: JSON.stringify(form)
+            });
+
+            S(false);
+
+            T({
+                ...form,
+                title: "",
+                description: ""
+            });
+
+            await load();
+            G("Chore created.");
+        } catch (x) {
+            E(x.message);
+        }
+    };
+
+    // Complete or reopen chore
+    const toggle = async id => {
+        try {
+            await api(`/chores/${id}/complete`, {
+                method: "PATCH",
+                body: "{}"
+            });
+
+            await load();
+        } catch (x) {
+            E(x.message);
+        }
+    };
+
+    // Delete chore
+    const remove = async id => {
+        if (!confirm("Delete this chore and its history?")) {
+            return;
+        }
+
+        try {
+            await api(`/chores/${id}`, {
+                method: "DELETE"
+            });
+
+            await load();
+        } catch (x) {
+            E(x.message);
+        }
+    };
+
+    // Delete housemate
+    const delMember = async id => {
+        if (!confirm("Remove housemate?")) {
+            return;
+        }
+
+        try {
+            await api(`/housemates/${id}`, {
+                method: "DELETE"
+            });
+
+            await load();
+        } catch (x) {
+            E(x.message);
+        }
+    };
+
+    const nav = [
+        ["Overview", Home],
+        ["Chores", ListTodo],
+        ["Housemates", Users],
+        ["Fairness", BarChart3]
+    ];
+
+    return (
+        <div className="shell">
+            <aside>
+                <div className="brand">
+                    <span>
+                        <Leaf />
+                    </span>
+
+                    <div>
+                        <b>homechore</b>
+                        <small>FAIRNESS PLANNER</small>
+                    </div>
+                </div>
+
+                <div className="workspace">
+                    🏠
+                    <div>
+                        <b>Shared home</b>
+                        <small>Household workspace</small>
+                    </div>
+                </div>
+
+                <label className="navlabel">WORKSPACE</label>
+
+                {nav.map(([n, I]) => (
+                    <button
+                        className={page === n ? "selected" : "nav"}
+                        onClick={() => P(n)}
+                        key={n}
+                    >
+                        <I size={18} />
+                        {n}
+                    </button>
+                ))}
+
+                <div className="tip">
+                    <b>Small steps, shared fairly.</b>
+                    <p>
+                        A little teamwork keeps a home running smoothly.
+                    </p>
+                </div>
+            </aside>
+
+            <main>
+                <header>
+                    <div>
+                        <small>YOUR HOUSEHOLD</small>
+                        <h1>{page}</h1>
+                    </div>
+
+                    <button className="secondary" onClick={load}>
+                        <RefreshCw size={15} />
+                        Refresh
+                    </button>
+                </header>
+
+                {err && (
+                    <div className="alert">
+                        {err}
+                        <button onClick={() => E("")}>×</button>
+                    </div>
+                )}
+
+                {msg && (
+                    <div className="success">
+                        {msg}
+                        <button onClick={() => G("")}>×</button>
+                    </div>
+                )}
+
+                {busy ? (
+                    <p className="loading">
+                        Loading household data…
+                    </p>
+                ) : page === "Overview" ? (
+                    <>
+                        <section className="hero">
+                            <span>HOUSEHOLD OVERVIEW</span>
+                            <h2>Good teamwork starts at home.</h2>
+                            <p>
+                                See what's done, what's next, and how the
+                                workload is shared.
+                            </p>
+                        </section>
+
+                        <div className="stats">
+                            <Stat
+                                icon={ListTodo}
+                                label="Total chores"
+                                value={chores.length}
+                                note="In your household"
+                            />
+
+                            <Stat
+                                icon={CheckCircle2}
+                                label="Completed"
+                                value={done}
+                                note={`${chores.length
+                                    ? Math.round(done / chores.length * 100)
+                                    : 0}% completion rate`}
+                            />
+
+                            <Stat
+                                icon={CalendarDays}
+                                label="Pending"
+                                value={pending}
+                                note="Waiting to be done"
+                            />
+
+                            <Stat
+                                icon={AlertCircle}
+                                label="Overdue"
+                                value={overdue}
+                                note="Past their due date"
+                            />
+                        </div>
+
+                        <div className="columns">
+                            <section className="panel">
+                                <PanelHead
+                                    title="Upcoming chores"
+                                    sub="Keep the household moving"
+                                    action={() => P("Chores")}
+                                />
+
+                                <ChoreList
+                                    chores={chores
+                                        .filter(x => x.status === "Pending")
+                                        .slice(0, 5)}
+                                    toggle={toggle}
+                                    remove={remove}
+                                />
+                            </section>
+
+                            <section className="panel">
+                                <h3>Housemates</h3>
+                                <p className="muted">
+                                    People sharing the workload
+                                </p>
+
+                                {members.map(m => (
+                                    <div className="person" key={m._id}>
+                                        <i>{m.name[0]}</i>
+                                        <b>{m.name}</b>
+                                    </div>
+                                ))}
+
+                                {!members.length && (
+                                    <Empty text="Add housemates to get started." />
+                                )}
+                            </section>
+                        </div>
+                    </>
+                ) : page === "Chores" ? (
+                    <section className="panel">
+                        <PanelHead
+                            title="Chore rota"
+                            sub="Create tasks, assign owners and track completion"
+                        />
+
+                        <button
+                            className="primary"
+                            onClick={() => S(!show)}
+                        >
+                            <Plus size={16} />
+                            Add chore
+                        </button>
+
+                        {show && (
+                            <form className="form" onSubmit={addChore}>
+                                <label>
+                                    Chore title
+                                    <input
+                                        required
+                                        minLength="2"
+                                        value={form.title}
+                                        onChange={e =>
+                                            T({ ...form, title: e.target.value })
+                                        }
+                                        placeholder="Clean kitchen"
+                                    />
+                                </label>
+
+                                <label>
+                                    Assigned to
+                                    <select
+                                        required
+                                        value={form.assignedTo}
+                                        onChange={e =>
+                                            T({ ...form, assignedTo: e.target.value })
+                                        }
+                                    >
+                                        <option value="">Select housemate</option>
+
+                                        {members.map(m => (
+                                            <option value={m._id} key={m._id}>
+                                                {m.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+
+                                <label>
+                                    Due date
+                                    <input
+                                        type="date"
+                                        required
+                                        value={form.dueDate}
+                                        onChange={e =>
+                                            T({ ...form, dueDate: e.target.value })
+                                        }
+                                    />
+                                </label>
+
+                                <label>
+                                    Priority
+                                    <select
+                                        value={form.priority}
+                                        onChange={e =>
+                                            T({ ...form, priority: e.target.value })
+                                        }
+                                    >
+                                        {["Low", "Medium", "High"].map(x => (
+                                            <option key={x}>{x}</option>
+                                        ))}
+                                    </select>
+                                </label>
+
+                                <label>
+                                    Repeat
+                                    <select
+                                        value={form.recurrence}
+                                        onChange={e =>
+                                            T({ ...form, recurrence: e.target.value })
+                                        }
+                                    >
+                                        {["None", "Daily", "Weekly", "Monthly"].map(x => (
+                                            <option key={x}>{x}</option>
+                                        ))}
+                                    </select>
+                                </label>
+
+                                <label>
+                                    Workload weight
+                                    <input
+                                        type="number"
+                                        min=".5"
+                                        max="10"
+                                        step=".5"
+                                        value={form.weight}
+                                        onChange={e =>
+                                            T({
+                                                ...form,
+                                                weight: Number(e.target.value)
+                                            })
+                                        }
+                                    />
+                                </label>
+
+                                <label className="full">
+                                    Description
+                                    <input
+                                        value={form.description}
+                                        onChange={e =>
+                                            T({
+                                                ...form,
+                                                description: e.target.value
+                                            })
+                                        }
+                                    />
+                                </label>
+
+                                <div className="full actions">
+                                    <button
+                                        type="button"
+                                        className="secondary"
+                                        onClick={() => S(false)}
+                                    >
+                                        Cancel
+                                    </button>
+
+                                    <button
+                                        className="primary"
+                                        disabled={!members.length}
+                                    >
+                                        Save chore
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+
+                        <div className="filters">
+                            {["All", "Pending", "Completed"].map(x => (
+                                <button
+                                    key={x}
+                                    className={filter === x ? "on" : ""}
+                                    onClick={() => Q(x)}
+                                >
+                                    {x}
+                                </button>
+                            ))}
+                        </div>
+
+                        <ChoreList
+                            chores={filtered}
+                            toggle={toggle}
+                            remove={remove}
+                        />
+                    </section>
+                ) : page === "Housemates" ? (
+                    <section className="panel">
+                        <h3>Your housemates</h3>
+                        <p className="muted">
+                            Manage people in your shared household.
+                        </p>
+
+                        <form
+                            className="addmember"
+                            onSubmit={addMember}
+                        >
+                            <input
+                                required
+                                minLength="2"
+                                maxLength="40"
+                                placeholder="Enter housemate name"
+                                value={name}
+                                onChange={e => N(e.target.value)}
+                            />
+
+                            <button className="primary">
+                                <Plus size={16} />
+                                Add housemate
+                            </button>
+                        </form>
+
+                        <div className="peoplegrid">
+                            {members.map(m => (
+                                <div className="personcard" key={m._id}>
+                                    <i>{m.name[0]}</i>
+                                    <b>{m.name}</b>
+
+                                    <button
+                                        onClick={() => delMember(m._id)}
+                                        title="Remove"
+                                    >
+                                        <Trash2 size={15} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+
+                        {!members.length && (
+                            <Empty text="Add the people who share your home." />
+                        )}
+                    </section>
+                ) : (
+                    <section className="panel">
+                        <h3>Fairness analytics</h3>
+
+                        <p className="muted">
+                            Completed workload in the last {fair.periodDays} days,
+                            adjusted by chore weight.
+                        </p>
+
+                        <div className="summary">
+                            <div>
+                                <small>Total workload</small>
+                                <b>{fair.totalWorkload}</b>
+                            </div>
+
+                            <div>
+                                <small>Average per housemate</small>
+                                <b>{fair.averageWorkload}</b>
+                            </div>
+
+                            <div>
+                                <small>Housemates</small>
+                                <b>{members.length}</b>
+                            </div>
+                        </div>
+
+                        {fair.members?.map(m => (
+                            <div className="fairrow" key={m._id}>
+                                <div>
+                                    <b>{m.name}</b>
+                                    <small>
+                                        {m.completedCount} completed · {m.workload} points
+                                    </small>
+                                </div>
+
+                                <div className="bar">
+                                    <span
+                                        style={{
+                                            width: `${m.sharePercent}%`
+                                        }}
+                                    />
+                                </div>
+
+                                <b>{m.sharePercent}%</b>
+
+                                <em className={m.imbalance ? "warning" : "ok"}>
+                                    {m.imbalance ? "Above average" : "In range"}
+                                </em>
+                            </div>
+                        ))}
+
+                        {!members.length && (
+                            <Empty text="Add housemates and complete chores to build a fairness history." />
+                        )}
+
+                        <p className="disclaimer">
+                            Fairness is an indicator, not a judgement.
+                            It depends on recorded completions, date range
+                            and workload weights.
+                        </p>
+                    </section>
+                )}
+
+                <footer>
+                    HomeChore Fairness · Shared living, made simpler
+                </footer>
+            </main>
+        </div>
+    );
+}
+
+function Stat({ icon: I, label, value, note }) {
+    return (
+        <div className="stat">
+            <I />
+            <small>{label}</small>
+            <b>{value}</b>
+            <span>{note}</span>
+        </div>
+    );
+}
+
+function PanelHead({ title, sub, action }) {
+    return (
+        <div className="panelhead">
+            <div>
+                <h3>{title}</h3>
+                <p className="muted">{sub}</p>
+            </div>
+
+            {action && (
+                <button className="link" onClick={action}>
+                    View all →
+                </button>
+            )}
+        </div>
+    );
+}
+
+function Empty({ text }) {
+    return (
+        <div className="empty">
+            ✦
+            <p>{text}</p>
+        </div>
+    );
+}
+
+function ChoreList({ chores, toggle, remove }) {
+    return chores.length ? (
+        <div>
+            {chores.map(c => (
+                <div className="chore" key={c._id}>
+                    <button
+                        className={`check ${c.status === "Completed" ? "checked" : ""
+                            }`}
+                        onClick={() => toggle(c._id)}
+                    >
+                        {c.status === "Completed" && <Check size={13} />}
+                    </button>
+
+                    <div className="choretext">
+                        <b>{c.title}</b>
+
+                        <small>
+                            {c.assignedTo?.name || "Housemate"} · Due{" "}
+                            {new Date(c.dueDate).toLocaleDateString("en-IN", {
+                                day: "numeric",
+                                month: "short"
+                            })}
+                            {c.recurrence !== "None"
+                                ? ` · ${c.recurrence}`
+                                : ""}
+                        </small>
+                    </div>
+
+                    <span className={`priority ${c.priority.toLowerCase()}`}>
+                        {c.priority}
+                    </span>
+
+                    <button
+                        className="delete"
+                        onClick={() => remove(c._id)}
+                    >
+                        <Trash2 size={15} />
+                    </button>
+                </div>
+            ))}
+        </div>
+    ) : (
+        <Empty text="No chores here yet. Add your first task." />
+    );
+}
