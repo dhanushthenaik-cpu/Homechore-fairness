@@ -7,6 +7,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import api from "./routes/api.js";
 
+import dns from "node:dns";
+
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../..");
