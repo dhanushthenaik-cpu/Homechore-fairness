@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: homechore-fairness
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run install:all && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: MONGODB_URI
+        sync: false
